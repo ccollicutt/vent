@@ -2,13 +2,26 @@
 
 A couple of years ago I worked on [Kubernetes the Hard Way on AWS with Ansible](https://github.com/ccollicutt/kubernetes-the-hard-way-with-aws-and-ansible) and now I'm doing it again, but this time with Packet.net and Ansible, and, of course, a much updated kthw.
 
+## Table of Contents
+
+1. [Overview](#overview)
+1. [Ansible Environment](#ansible-environment)
+1. [Ansible Variables](#ansible-variables)
+1. [Ansible Inventory](#ansible-inventory)
+1. [Ansible Connectivity](#ansible-connectivity)
+1. [Deploy Kubernetes](#deploy)
+1. [Configure Remote Access](#configure-remote-access)
+1. [Validate Deployment](#validate-deployment)
+1. [TODO](#todo)
+1. [Issues](#issues)
+
 ## Overview
 
 See [overview](OVERVIEW.md).
 
 ## Deploy Kubernetes
 
-### Step 1: Provision Baremetal Servers
+### Provision Baremetal Servers
 
 This example uses the [packet](https://github.com/ebsarr/packet) CLI. The easiest way to install the packet CLI is to have a go environment set up. But, one could create them in the Packet.net web interface as well. Nothing special is being done for provisioning at this time.
 
@@ -35,7 +48,7 @@ Note that it can take 10+ minutes for the baremetal nodes to become available.
 
 Neither currently seems to support spot instances. I would expect that to change eventually though.
 
-### Step 2: Setup a Place to Run Ansible From
+### Ansible Environment
 
 Because I am in Canada and the Packet.net servers are in Amsterdam, I setup a small instance on Digital Ocean, in Amsterdam, from which to run Ansible. You might want to do the same just to speed up Ansible runs.
 
@@ -63,7 +76,7 @@ ansible 2.6.2
   python version = 2.7.12 (default, Dec  4 2017, 14:50:18) [GCC 5.4.0 20160609]
 ```
 
-### Step 3: Configure group_vars/all
+### Ansible Variables
 
 There is an example `all` file to use.
 
@@ -92,7 +105,7 @@ Example:
 ENCRYPTION_KEY = "gPsm8rqATXiHLxtfwe/pZK5a8LytlFeadH3hJXxeNqc="
 ```
 
-### Step 4: Validate the Ansible Inventory Works
+### Ansible Inventory
 
 Once you have provisioned the servers and setup a place to run Ansible from, validate the Ansible inventory that comes with the project works.
 
@@ -223,7 +236,7 @@ Once the servers are active, we would expect to see something like the below.
 }
 ```
 
-### Step 5: Validate Ansible Connectivity
+### Ansible Connectivity
 
 If Ansible is setup properly, and if the SSH authentication is working, and we have IP connectivity, the following should be successful.
 
@@ -248,7 +261,7 @@ worker-1 | SUCCESS => {
 }
 ```
 
-### Step 6: Run the Deployment
+### Deploy
 
 All this is left is to run the entire deployment.
 
@@ -277,7 +290,7 @@ worker-1                   : ok=31   changed=20   unreachable=0    failed=0
 
 At this point you should have a functional Kubernetes deployment.
 
-## Step 6: Configure Remote Access
+## Configure Remote Access
 
 For this step, you will need to run it from the node Ansible was deployed from. We are using files in the `fetched` directory. Otherwise, feel free to read the Certificate Authority and Kubernetes Configuration Files playbook to understand what is happening here.
 
@@ -346,7 +359,7 @@ cat $HOME/.kube/config
 
 At this point there should be a config in `$HOME/.kube` that will be used to access the remote k8s deployment running in Packet.net.
 
-## Step 7: Validate the Deployment
+## Validate Deployment
 
 Now that k8s has been deployed, we should validate that it works.
 
