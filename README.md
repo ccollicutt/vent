@@ -4,7 +4,6 @@ A couple of years ago I worked on [Kubernetes the Hard Way on AWS with Ansible](
 
 ## Table of Contents
 
-1. [Overview](#overview)
 1. [Ansible Environment](#ansible-environment)
 1. [Ansible Variables](#ansible-variables)
 1. [Ansible Inventory](#ansible-inventory)
