@@ -11,3 +11,11 @@
 - import_playbook: 08-kubernetes-networking.yml
 - import_playbook: 09-bootstrapping-kubernetes-workers.yml
 - import_playbook: 10-dns-addon.yml
+
+- hosts:
+    - localhost
+  connection: local
+  tasks:
+
+  - debug:
+      msg: "kubernetes has been deployed with ansible on packet.net"
