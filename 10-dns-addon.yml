@@ -1,0 +1,17 @@
+---
+
+- hosts:
+    - tag_controller[0]
+
+  tasks:
+
+    - name: install kubedns deployment file
+      copy:
+        src: "kube-dns.yaml"
+        dest: "/root/"
+
+    - name: deploy kubedns
+      shell: |
+        kubectl apply -f kube-dns.yaml --kubeconfig admin.kubeconfig
+      args:
+        chdir: "/root/"

@@ -1,0 +1,17 @@
+[Unit]
+Description=Kubernetes Kube Proxy
+Documentation=https://github.com/kubernetes/kubernetes
+
+[Service]
+# NOTE(curtis): --bind-address seems to be deprecated but is still in the
+# docs... https://github.com/kubernetes/kubernetes/issues/50927
+ExecStart=/usr/local/bin/kube-proxy \
+  --config=/var/lib/kube-proxy/kube-proxy-config.yaml \
+  --bind-address={{ ansible_fake0.ipv4.address }} \
+  --healthz-bind-address={{ ansible_fake0.ipv4.address }} \
+  -v=4
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

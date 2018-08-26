@@ -1,0 +1,79 @@
+
+---
+
+- hosts:
+    - tag_controller
+    - tag_worker
+
+  tasks:
+
+    # NOTE(curtis) - Fake0 - Flannel can't understand which IP on bond0 to
+    # use. Obviously we want vxlan traffic to go over the internal network
+    # not the external network, though they are on the same interface. So,
+    # for now, I'm using a macvlan interface I've called fake0 and moving
+    # the internal IP to that interface.
+    #
+    # See https://github.com/coreos/flannel/issues/981
+
+    - fail:
+        msg: "neither ansible_bond0_0 or ansible_fake0 exists"
+      when: "ansible_bond0_0 is not defined and ansible_fake0 is not defined"
+
+    # NOTE(curtis): I had all kinds of issues with kube-dns working on one node
+    # but not the other, and had to ensure br_netfilter was installed
+    # See: https://github.com/kubernetes/kubernetes/issues/21613
+    - name: ensure br_netfilter module is installed
+      modprobe:
+        name: br_netfilter
+        state: present
+
+    - name: setup /etc/modules-load.d/br_netfilter.conf
+      copy:
+        content: |
+          br_netfilter
+        dest: "/etc/modules-load.d/br_netfilter.conf"
+
+    - name: remove IP from bond0_0 when it exists
+      block:
+        # NOTE: convert to ip/31
+        - debug:
+            var: ansible_bond0_0.ipv4.netmask
+            verbosity: 2
+
+        - set_fact:
+            net_to_convert: "{{ ansible_bond0_0.ipv4.network }}/{{ ansible_bond0_0.ipv4.netmask }}"
+
+        - set_fact:
+            prefix: "{{ net_to_convert | ipaddr('prefix') }}"
+
+        - debug:
+            var: prefix
+            verbosity: 2
+
+        - name: remove local network ip from bond0:0
+          shell: ip ad del {{ ansible_bond0_0.ipv4.address }}/{{ prefix }} dev bond0
+
+        # FIXME: could use net_static_route module maybe, but then need to know
+        # the gateway
+        - name: remove 10.0.0.0/0 route from bond0
+          shell: ip route del 10.0.0.0/8 dev bond0
+
+      when: ansible_fake0 is not defined
+      # end block
+
+
+    - name: install new /etc/network/interfaces
+      template:
+        src: "network-interfaces"
+        dest: "/etc/network/interfaces"
+      ignore_errors: true
+
+    - name: ifup ansible_fake0
+      shell: ifup fake0
+      when: ansible_fake0 is not defined
+
+    - setup:
+      when: ansible_fake0 is not defined
+
+
+

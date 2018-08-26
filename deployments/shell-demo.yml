@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: shell-demo
+spec:
+  restartPolicy: Always
+  containers:
+  - name: busybox
+    image: busybox
+    command: ["/bin/sh"]
+    args: ["-c", "while true; do echo sleeping; sleep 10;done"]

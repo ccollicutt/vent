@@ -1,0 +1,20 @@
+kind: KubeletConfiguration
+apiVersion: kubelet.config.k8s.io/v1beta1
+authentication:
+  anonymous:
+    enabled: false
+  webhook:
+    enabled: true
+  x509:
+    clientCAFile: "/var/lib/kubernetes/ca.pem"
+authorization:
+  mode: Webhook
+clusterDomain: "cluster.local"
+clusterDNS:
+  - "172.16.31.10"
+# NOTE(curtis): not using host route style networking, will use flannel, not
+# sure what this will mean...
+podCIDR: "{{ pod_cidr }}"
+runtimeRequestTimeout: "15m"
+tlsCertFile: "/var/lib/kubelet/{{ ansible_hostname }}.pem"
+tlsPrivateKeyFile: "/var/lib/kubelet/{{ ansible_hostname }}-key.pem"

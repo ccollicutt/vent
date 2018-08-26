@@ -1,0 +1,165 @@
+---
+
+- hosts:
+    - tag_worker
+
+  vars:
+
+    packages:
+      - socat
+      - conntrack
+      - ipset
+
+    kube_tars:
+      - name: crictl
+        url: "https://github.com/kubernetes-incubator/cri-tools/releases/download/v1.0.0-beta.0/crictl-v1.0.0-beta.0-linux-amd64.tar.gz"
+        dest: "/usr/local/bin/"
+        extra_opts: ""
+      - name: cni-plugins
+        url: "https://github.com/containernetworking/plugins/releases/download/v0.6.0/cni-plugins-amd64-v0.6.0.tgz"
+        dest: "/opt/cni/bin/"
+        extra_opts: ""
+      - name: containerd
+        url: "https://github.com/containerd/containerd/releases/download/v1.1.0/containerd-1.1.0.linux-amd64.tar.gz"
+        dest: "/bin/"
+        extra_opts: "--strip-components=1"
+
+    kube_binaries:
+      - name: kubectl
+        url: "https://storage.googleapis.com/kubernetes-release/release/v1.10.7/bin/linux/amd64/kubectl"
+        dest: "/usr/local/bin/"
+      - name: kube-proxy
+        url: "https://storage.googleapis.com/kubernetes-release/release/v1.10.7/bin/linux/amd64/kube-proxy"
+        dest: "/usr/local/bin/"
+      - name: kubelet
+        url: "https://storage.googleapis.com/kubernetes-release/release/v1.10.7/bin/linux/amd64/kubelet"
+        dest: "/usr/local/bin/"
+      - name: runsc
+        url: "https://storage.googleapis.com/kubernetes-the-hard-way/runsc"
+        dest: "/usr/local/bin/runsc"
+        # NOTE: name change here, from runc.amd64 to just runc
+      - name: runc
+        url: "https://github.com/opencontainers/runc/releases/download/v1.0.0-rc5/runc.amd64"
+        dest: "/usr/local/bin/runc"
+
+    kube_dirs:
+      - "/etc/cni/net.d"
+      - "/opt/cni/bin"
+      - "/var/lib/kubelet"
+      - "/var/lib/kube-proxy"
+      - "/var/lib/kubernetes"
+      - "/var/run/kubernetes"
+      - "/etc/containerd"
+
+    kube_copy_config:
+      - name: containerd.service
+        src: "containerd.service"
+        dest: "/etc/systemd/system/"
+
+    kube_template_config:
+      - name: kubelet-config
+        src: "kubelet-config.yaml"
+        dest: "/var/lib/kubelet/"
+      - name: containerd-config-toml
+        src: "config.toml"
+        dest: "/etc/containerd/"
+      - name: kube-proxy-config
+        src: "kube-proxy-config.yaml"
+        dest: "/var/lib/kube-proxy"
+      - name: kubelet-service
+        src: "kubelet.service"
+        dest: "/etc/systemd/system/"
+      - name: kube-proxy-service
+        src: "kube-proxy.service"
+        dest: "/etc/systemd/system"
+
+    kube_fetched_config:
+      - name: key.pem
+        src: "{{ ansible_hostname }}-key.pem"
+        dest: "/var/lib/kubelet/"
+      - name: pem
+        src: "{{ ansible_hostname }}.pem"
+        dest: "/var/lib/kubelet/"
+      - name: kubelet kubeconfig
+        src: "{{ ansible_hostname }}.kubeconfig"
+        dest: "/var/lib/kubelet/kubeconfig"
+      - name: ca.pem
+        src: "ca.pem"
+        dest: "/var/lib/kubernetes/"
+      - name: kube-proxy kubeconfig
+        src: "kube-proxy.kubeconfig"
+        dest: "/var/lib/kube-proxy/kubeconfig"
+
+    kube_services:
+      - containerd
+      - kubelet
+      - kube-proxy
+
+  tasks:
+
+    - name: ensure required packages are installed
+      apt:
+        name: "{{ item }}"
+      with_items: "{{ packages }}"
+
+    - name: ensure required directories exist
+      file:
+        path: "{{ item }}"
+        state: "directory"
+        recurse: true
+      with_items: "{{ kube_dirs }}"
+
+    - name: download various binary components
+      get_url:
+        url: "{{ item.url }}"
+        dest: "{{ item.dest }}"
+        mode: 0755
+      with_items: "{{ kube_binaries }}"
+
+    - name: download and unarchive tar files of various components
+      unarchive:
+        src: "{{ item.url }}"
+        dest: "{{ item.dest }}"
+        remote_src: yes
+        extra_opts: "{{ item.extra_opts }}"
+      with_items: "{{ kube_tars }}"
+
+    - name: install required files
+      copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+      with_items: "{{ kube_copy_config }}"
+      notify:
+        - restart worker
+
+    - name: install templated config files
+      template:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+      with_items: "{{ kube_template_config }}"
+      notify:
+        - restart worker
+
+    - name: install fetched pems and kubeconfigs
+      copy:
+        src: "fetched/{{ item.src }}"
+        dest: "{{ item.dest }}"
+      with_items: "{{ kube_fetched_config }}"
+      notify:
+        - restart worker
+
+    - name: ensure worker services are running
+      service:
+        name: "{{ item }}"
+        enabled: true
+        state: "started"
+      with_items: "{{ kube_services }}"
+
+  handlers:
+
+    - name: restart worker
+      systemd:
+        daemon_reload: yes
+        name: "{{ item }}"
+        state: "restarted"
+      with_items: "{{ kube_services }}"

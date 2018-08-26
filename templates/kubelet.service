@@ -1,0 +1,28 @@
+[Unit]
+Description=Kubernetes Kubelet
+Documentation=https://github.com/kubernetes/kubernetes
+After=containerd.service
+Requires=containerd.service
+
+[Service]
+#NOTE(curtis): added --fail-swap-on=false
+#NOTE(curtis): added --allow-privileged=true it is in the kube-apiserver
+# service file, and I am using kube-flannel.yaml right now to try to install
+# networking...
+ExecStart=/usr/local/bin/kubelet \
+  --address={{ ansible_fake0.ipv4.address }} \
+  --config=/var/lib/kubelet/kubelet-config.yaml \
+  --container-runtime=remote \
+  --container-runtime-endpoint=unix:///var/run/containerd/containerd.sock \
+  --image-pull-progress-deadline=2m \
+  --kubeconfig=/var/lib/kubelet/kubeconfig \
+  --network-plugin=cni \
+  --register-node=true \
+  --fail-swap-on=false \
+  --allow-privileged=true \
+  --v=2
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

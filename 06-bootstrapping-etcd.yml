@@ -1,0 +1,76 @@
+---
+
+- hosts:
+    - tag_controller
+
+  vars:
+
+    etcd_download_dir: "/usr/share/etcd-download"
+    etcd_download_url: "https://github.com/coreos/etcd/releases/download/v3.3.5/etcd-v3.3.5-linux-amd64.tar.gz"
+    etcd_config_dirs:
+      - "/etc/etcd"
+      - "/var/lib/etcd"
+    etcd_systemd_config: "/etc/systemd/system/"
+    kube_certs:
+      - "ca.pem"
+      - "kubernetes.pem"
+      - "kubernetes-key.pem"
+
+  tasks:
+
+    - name: download and unarchive etcd
+      unarchive:
+        src: "{{ etcd_download_url }}"
+        dest: "/usr/local/bin/"
+        remote_src: yes
+        extra_opts: "--strip-components=1"
+
+    - name: create etcd directories
+      file:
+        path: "{{ item }}"
+        state: "directory"
+      with_items: "{{ etcd_config_dirs }}"
+
+    # ca.pem kubernetes-key.pem kubernetes.pem
+    - name: install certificates
+      copy:
+        src: "fetched/{{ item }}"
+        dest: "/etc/etcd/{{ item }}"
+      with_items: "{{ kube_certs }}"
+      notify:
+        - restart etcd
+        - test etcd
+
+    - name: install etcd systemd config
+      template:
+        src: "etcd.service"
+        dest: "{{ etcd_systemd_config }}/etcd.service"
+      notify:
+        - restart etcd
+        - test etcd
+
+    - name: start etcd
+      systemd:
+        name: "etcd"
+        daemon_reload: yes
+        enabled: yes
+        state: "started"
+      handlers:
+        - test etcd
+
+  handlers:
+
+    - name: restart etcd
+      systemd:
+        name: "etcd"
+        daemon_reload: yes
+        state: "restarted"
+
+    - name: test etcd
+      shell: |
+        ETCDCTL_API=3 etcdctl member list \
+        --endpoints=https://127.0.0.1:2379 \
+        --cacert=/etc/etcd/ca.pem \
+        --cert=/etc/etcd/kubernetes.pem \
+        --key=/etc/etcd/kubernetes-key.pem
+      changed_when: false

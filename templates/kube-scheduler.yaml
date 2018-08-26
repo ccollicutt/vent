@@ -1,0 +1,8 @@
+apiVersion: componentconfig/v1alpha1
+kind: KubeSchedulerConfiguration
+clientConnection:
+  kubeconfig: "/var/lib/kubernetes/kube-scheduler.kubeconfig"
+leaderElection:
+  leaderElect: true
+healthzBindAddress: {{ ansible_fake0.ipv4.address }}:10251
+metricsBindAddress: {{ ansible_fake0.ipv4.address }}:10251

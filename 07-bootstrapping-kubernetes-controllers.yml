@@ -1,0 +1,145 @@
+---
+
+- hosts:
+    - tag_controller
+  vars:
+
+    kubernetes_download_urls:
+      - "https://storage.googleapis.com/kubernetes-release/release/v1.10.7/bin/linux/amd64/kube-apiserver"
+      - "https://storage.googleapis.com/kubernetes-release/release/v1.10.7/bin/linux/amd64/kube-controller-manager"
+      - "https://storage.googleapis.com/kubernetes-release/release/v1.10.7/bin/linux/amd64/kube-scheduler"
+      - "https://storage.googleapis.com/kubernetes-release/release/v1.10.7/bin/linux/amd64/kubectl"
+
+    kubernetes_directories:
+      - "/etc/kubernetes/config"
+      - "/var/lib/kubernetes/"
+
+    kube_services:
+      - "kube-apiserver"
+      - "kube-controller-manager"
+      - "kube-scheduler"
+
+    kube_files:
+      - "ca.pem"
+      - "ca-key.pem"
+      - "kubernetes-key.pem"
+      - "kubernetes.pem"
+      - "service-account-key.pem"
+      - "service-account.pem"
+      - "kube-scheduler.kubeconfig"
+      - "kube-controller-manager.kubeconfig"
+
+  tasks:
+
+    - name: download various kubernetes binary components
+      get_url:
+        url: "{{ item }}"
+        dest: "/usr/local/bin/"
+        mode: 0755
+      with_items: "{{ kubernetes_download_urls }}"
+
+    - name: ensure kubernetes directories exist
+      file:
+        path: "{{ item }}"
+        state: "directory"
+      with_items: "{{ kubernetes_directories }}"
+
+    - name: install required certificates and kubeconfig files
+      copy:
+        src: "fetched/{{ item }}"
+        dest: "/var/lib/kubernetes/"
+      with_items: "{{ kube_files }}"
+      notify:
+        - restart kube
+
+    - name: install encryption config
+      template:
+        src: "encryption-config.yaml"
+        dest: "/var/lib/kubernetes/"
+      notify:
+        - restart kube
+
+    - name: install kube scheduler config
+      template:
+        src: "kube-scheduler.yaml"
+        dest: "/etc/kubernetes/config/"
+      notify:
+        - restart kube
+
+    - name: install systemd configs from template
+      template:
+        src: "{{ item }}.service"
+        dest: "/etc/systemd/system/"
+      with_items: "{{ kube_services }}"
+      notify:
+        - restart kube
+
+    - meta: flush_handlers
+
+    - name: start kubernetes services
+      systemd:
+        name: "{{ item }}"
+        daemon_reload: yes
+        enabled: yes
+        state: "started"
+      with_items: "{{ kube_services }}"
+
+    - name: test component health
+      shell: |
+        kubectl get componentstatuses --kubeconfig admin.kubeconfig
+      register: kube_componentstatuses
+      failed_when: "'Unhealty' in kube_componentstatuses.stdout"
+      changed_when: false
+      args:
+        chdir: "/root"
+
+    # FIXME(curtis): use get_url or something better
+    - name: test api health
+      shell: |
+        curl -k https://127.0.0.1:6443/healthz
+      #failed_when: "'ok' not in kube_api_health.stdout"
+      changed_when: false
+      register: kube_api_health
+      until: "'ok' in kube_api_health.stdout"
+      retries: 10
+      delay: 6
+
+    - fail:
+        msg: "could not connect to https://127.0.0.1:6443/healthz"
+      when: kube_api_health.failed
+
+    # FIXME(curtis): could be handled by ansible kubernetes module?
+    - name: copy rbac yaml file
+      copy:
+        src: "rbac-permissions.yaml"
+        dest: "/root/"
+      notify:
+
+    - name: copy rbac cluserrole yaml file
+      copy:
+        src: "rbac-clusterrole.yaml"
+        dest: "/root/"
+      notify:
+
+    # FIXME: these always run...
+    - name: load rbac
+      shell: |
+        kubectl apply --kubeconfig admin.kubeconfig \
+        -f /root/rbac-permissions.yaml
+      args:
+        chdir: "/root"
+
+    - name: load rbac-clusterrole
+      shell: |
+        kubectl apply --kubeconfig admin.kubeconfig \
+        -f /root/rbac-clusterrole.yaml
+      args:
+        chdir: "/root"
+
+  handlers:
+    - name: restart kube
+      systemd:
+        name: "{{ item }}"
+        state: "restarted"
+      with_items: "{{ kube_services }}"
+

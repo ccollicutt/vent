@@ -1,0 +1,33 @@
+---
+
+#
+# Note that we just run this on the first controller.
+#
+
+- hosts:
+    - tag_controller[0]
+
+  vars:
+
+    cfssl_binaries:
+      - name: cfssl
+        url: "https://pkg.cfssl.org/R1.2/cfssl_linux-amd64"
+        dest: "/usr/local/bin/cfssl"
+      - name: cfssljson
+        url: "https://pkg.cfssl.org/R1.2/cfssljson_linux-amd64"
+        dest: "/usr/local/bin/cfssljson"
+
+  tasks:
+
+    - name: install cfssl binaries
+      get_url:
+        url: "{{ item.url }}"
+        dest: "{{ item.dest }}"
+        mode: 0755
+      with_items: "{{ cfssl_binaries }}"
+
+    - name: install kubectl binary
+      get_url:
+        url: "https://storage.googleapis.com/kubernetes-release/release/v1.10.7/bin/linux/amd64/kubectl"
+        dest: "/usr/local/bin/kubectl"
+        mode: 0755

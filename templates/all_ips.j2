@@ -1,0 +1,6 @@
+{%- for host in groups.tag_controller | union(groups.tag_worker) -%}
+{{ hostvars[host].ansible_bond0.ipv4.address }},{{ hostvars[host].ansible_fake0.ipv4.address }}
+{%- if not loop.last -%}
+,
+{%- endif -%}
+{%- endfor -%}

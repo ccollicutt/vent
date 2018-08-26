@@ -1,0 +1,26 @@
+[Unit]
+Description=Kubernetes Controller Manager
+Documentation=https://github.com/kubernetes/kubernetes
+
+[Service]
+# NOTE(curtis): --address is deprecated?
+ExecStart=/usr/local/bin/kube-controller-manager \
+  --address={{ ansible_fake0.ipv4.address }} \
+  --bind-address={{ ansible_fake0.ipv4.address }} \
+  --allocate-node-cidrs=true \
+  --cluster-cidr={{ cluster_cidr }} \
+  --cluster-name=kubernetes \
+  --cluster-signing-cert-file=/var/lib/kubernetes/ca.pem \
+  --cluster-signing-key-file=/var/lib/kubernetes/ca-key.pem \
+  --kubeconfig=/var/lib/kubernetes/kube-controller-manager.kubeconfig \
+  --leader-elect=true \
+  --root-ca-file=/var/lib/kubernetes/ca.pem \
+  --service-account-private-key-file=/var/lib/kubernetes/service-account-key.pem \
+  --service-cluster-ip-range={{ service_cluster_cidr }} \
+  --use-service-account-credentials=true \
+  --v=2
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

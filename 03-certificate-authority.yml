@@ -1,0 +1,199 @@
+---
+
+#
+# Note that we just run this on the first controller.
+#
+
+- hosts:
+    - tag_controller[0]
+
+  vars:
+
+    controller_configs:
+      - ca-config.json
+      - ca-csr.json
+      - admin-csr.json
+      - kube-controller-manager-csr.json
+      - kube-proxy-csr.json
+      - kube-scheduler-csr.json
+      - kubernetes-csr.json
+      - service-account-csr.json
+      - developer-csr.json
+
+    kube_users:
+      - admin
+      - kube-controller-manager
+      - kube-proxy
+      - kube-scheduler
+      - service-account
+      - developer
+
+  tasks:
+
+    # FIXME(curtis): most of these shell commands could be brought down to
+    # just one run of it all.
+    - name: install cfssl configuration files
+      copy:
+        src: "{{ item }}"
+        dest: "/root/{{ item }}"
+      with_items: "{{ controller_configs }}"
+
+    - name: generate the CA certificate and private key
+      shell: cfssl gencert -initca ca-csr.json | cfssljson -bare ca
+      args:
+        chdir: /root
+        creates: /root/ca.pem
+
+    - name: verify CA certificate
+      shell: openssl x509 -in ca.pem -text -noout
+      changed_when: False
+
+    - name: generate user and system pem files
+      shell: |
+        cfssl gencert \
+        -ca=ca.pem \
+        -ca-key=ca-key.pem \
+        -config=ca-config.json \
+        -profile=kubernetes \
+        {{ item }}-csr.json | cfssljson -bare {{ item }}
+      args:
+        chdir: "/root"
+        creates: "{{ item }}.pem"
+      with_items: "{{ kube_users }}"
+
+    - name: verify pem
+      shell: openssl x509 -in {{ item }}.pem -text -noout
+      changed_when: False
+      with_items: "{{ kube_users }}"
+
+#
+# Instance Certs
+#
+
+- hosts:
+    - tag_controller
+    - tag_worker
+  tasks:
+
+    - name: create instance csr json file
+      template:
+        src: "instance-csr.json"
+        dest: "/root/{{ ansible_hostname }}-csr.json"
+      delegate_to: "{{ groups.tag_controller[0] }}"
+
+    - name: generate instances certificates and private keys
+      shell: |
+        cfssl gencert \
+        -ca=ca.pem \
+        -ca-key=ca-key.pem \
+        -config=ca-config.json \
+        -hostname={{ ansible_hostname }},{{ ansible_bond0.ipv4.address }},{{ ansible_fake0.ipv4.address }} \
+        -profile=kubernetes \
+        {{ ansible_hostname }}-csr.json | cfssljson -bare {{ ansible_hostname }}
+      args:
+        chdir: "/root"
+        creates: "{{ ansible_hostname }}.pem"
+      delegate_to: "{{ groups.tag_controller[0] }}"
+
+    # Currently need to know all the IPs
+    - set_fact:
+         all_ips: "{{ lookup('template', 'all_ips.j2') }}"
+
+    - debug:
+       var: all_ips
+       verbosity: 2
+
+    # FIXME(curtis): In kthw there is a gcp load balancer used, not sure
+    # quite yet what I will do here instead, for now all the ips are going
+    # into the cert.
+    # NOTE(curtis): don't remove 10.32.0.1 that is used by k8s, note, I've
+    # changed to 172.16.0.0/20 so 172.16.31.1
+    - name: generate the kubernetes certificate and private key
+      shell: |
+        cfssl gencert \
+        -ca=ca.pem \
+        -ca-key=ca-key.pem \
+        -config=ca-config.json \
+        -hostname={{ all_ips }},172.16.31.1,127.0.0.1,kubernetes.default \
+        -profile=kubernetes \
+        kubernetes-csr.json | cfssljson -bare kubernetes
+      args:
+        chdir: "/root"
+        creates: "kubernetes.pem"
+      delegate_to: "{{ groups.tag_controller[0] }}"
+      run_once: True
+
+- hosts:
+    - tag_controller[0]
+  gather_facts: false
+  tasks:
+
+    - name: find all the pem files
+      find:
+        paths: "/root"
+        patterns: '*.pem'
+      register: pem_files
+
+    - debug:
+        var: pem_files
+        verbosity: 2
+
+    - name: fetch required certificates
+      fetch:
+        flat: True
+        dest: "fetched/"
+        src: "{{ item.path }}"
+      with_items: "{{ pem_files.files }}"
+
+- hosts:
+    - tag_worker
+
+  vars:
+
+    worker_certs:
+      - "ca.pem"
+      - "{{ ansible_hostname }}-key.pem"
+      - "{{ ansible_hostname }}.pem"
+
+  tasks:
+
+    - name: ensure a temporary certificate storage directory exists
+      file:
+        path: "/root/certificates"
+        state: "directory"
+
+    - name: install certificates
+      copy:
+        src: "fetched/{{ item }}"
+        dest: "/root/certificates/{{ item }}"
+      with_items: "{{ worker_certs }}"
+
+
+- hosts:
+    - tag_controller
+
+  vars:
+
+    controller_certs:
+      - "ca.pem"
+      - "ca-key.pem"
+      - "kubernetes-key.pem"
+      - "kubernetes.pem"
+      - "service-account-key.pem"
+      - "service-account.pem"
+
+  tasks:
+
+    - name: ensure a temporary certificate storage directory exists
+      file:
+        path: "/root/certificates"
+        state: "directory"
+
+    # FIXME(curtis): we may not need to put these here, in the kthw example
+    # they are copied to the right spot from /root but we don't need to do that
+    # as ansible can put it from fetched
+    - name: copy certificates to node for later use
+      copy:
+        src: "fetched/{{ item }}"
+        dest: "/root/certificates/{{ item }}"
+      with_items: "{{ controller_certs }}"

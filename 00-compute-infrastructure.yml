@@ -1,0 +1,12 @@
+---
+
+- hosts:
+    - localhost
+  connection: local
+  tasks:
+    - packet_device:
+        project_id: <your_project_id>
+        hostnames: myserver
+        operating_system: ubuntu_16_04
+        plan: baremetal_0
+        facility: sjc1

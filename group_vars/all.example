@@ -1,0 +1,8 @@
+---
+
+# Create by running `head -c 32 /dev/urandom | base64`
+ENCRYPTION_KEY: <REPLACE>
+
+# NOTE(curtis): rfc 1918 says /20 for 172.16, but am just using /16
+cluster_cidr: "172.16.0.0/16"
+service_cluster_cidr: "172.16.31.0/24"

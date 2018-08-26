@@ -1,0 +1,146 @@
+---
+
+# Get facts
+- hosts:
+    - tag_controller[0]
+
+  vars:
+
+    kubeconfigs:
+      - name: "kube-proxy"
+        server: "{{ ansible_fake0.ipv4.address }}:6443"
+        user: "system:kube-proxy"
+
+      - name: "kube-controller-manager"
+        server: "127.0.0.1:6443"
+        user: "system:kube-controller-manager"
+
+      - name: "kube-scheduler"
+        server: "127.0.0.1:6443"
+        user: "system:kube-scheduler"
+
+      - name: "admin"
+        server: "127.0.0.1:6443"
+        user: "admin"
+
+  tasks:
+
+    - name: create {{ item.name }}.kubeconfig
+      shell: |
+        kubectl config set-cluster kubernetes-the-hard-way \
+          --certificate-authority=ca.pem \
+          --embed-certs=true \
+          --server=https://{{ item.server }} \
+          --kubeconfig={{ item.name }}.kubeconfig && \
+        kubectl config set-credentials {{ item.user }} \
+          --client-certificate={{ item.name }}.pem \
+          --client-key={{ item.name }}-key.pem \
+          --embed-certs=true \
+          --kubeconfig={{ item.name }}.kubeconfig && \
+        kubectl config set-context default \
+          --cluster=kubernetes-the-hard-way \
+          --user={{ item.user }} \
+          --kubeconfig={{ item.name }}.kubeconfig && \
+        kubectl config use-context default --kubeconfig={{ item.name }}.kubeconfig
+      args:
+        chdir: "/root"
+        creates: "{{ item.name }}.kubeconfig"
+      with_items: "{{ kubeconfigs }}"
+
+- hosts:
+    - tag_worker
+  tasks:
+
+    # FIXME(curtis): should use an elastic IP or something...for now use the
+    # first, or only, controller
+    - set_fact:
+        public_ip: "{{ hostvars[groups.tag_controller[0]].ansible_bond0.ipv4.address }}"
+        private_ip: "{{ hostvars[groups.tag_controller[0]].ansible_fake0.ipv4.address }}"
+
+    # FIXME(curtis): anything but this! :)
+    - name: create kubeconfig
+      shell: |
+        kubectl config set-cluster kubernetes-the-hard-way \
+        --certificate-authority=ca.pem \
+        --embed-certs=true \
+        --server=https://{{ private_ip }}:6443 \
+        --kubeconfig={{ ansible_hostname }}.kubeconfig && \
+        kubectl config set-credentials system:node:{{ ansible_hostname }} \
+        --client-certificate={{ ansible_hostname }}.pem \
+        --client-key={{ ansible_hostname }}-key.pem \
+        --embed-certs=true \
+        --kubeconfig={{ ansible_hostname }}.kubeconfig && \
+        kubectl config set-context default \
+        --cluster=kubernetes-the-hard-way \
+        --user=system:node:{{ ansible_hostname }} \
+        --kubeconfig={{ ansible_hostname }}.kubeconfig && \
+        kubectl config use-context default --kubeconfig={{ ansible_hostname }}.kubeconfig
+      delegate_to: "{{ groups.tag_controller[0] }}"
+      args:
+        chdir: "/root"
+        creates: "{{ ansible_hostname}}.kubeconfig"
+
+- hosts:
+    - tag_controller[0]
+  gather_facts: false
+  tasks:
+
+    - name: find all the kubeconfig files
+      find:
+        paths: "/root"
+        patterns: '*.kubeconfig'
+      register: kubeconfig_files
+
+    - debug:
+        var: kubeconfig_files
+        verbosity: 2
+
+    - name: fetch required kubeconfig files
+      fetch:
+        flat: True
+        dest: "fetched/"
+        src: "{{ item.path }}"
+      with_items: "{{ kubeconfig_files.files }}"
+#
+# - hosts:
+#     - tag_worker
+#
+#   tasks:
+#
+#     - name: ensure a temporary certificate storage directory exists
+#       file:
+#         path: "/root/kubeconfigs"
+#         state: "directory"
+#
+#     - name: install certificates
+#       copy:
+#         src: "fetched/{{ item }}"
+#         dest: "/root/kubeconfigs/{{ item }}"
+#       #   gcloud compute scp ${instance}.kubeconfig kube-proxy.kubeconfig ${instance}:~/
+#       with_items:
+#         - "{{ ansible_hostname }}.kubeconfig"
+#         - "kube-proxy.kubeconfig"
+#
+# - hosts:
+#     - tag_controller
+#
+#   vars:
+#
+#     kube_configs:
+#       - "admin.kubeconfig"
+#       - "kube-controller-manager.kubeconfig"
+#       - "kube-scheduler.kubeconfig"
+#
+#   tasks:
+#
+#     - name: ensure a temporary kubeconfig storage directory exists
+#       file:
+#         path: "/root/kubeconfigs"
+#         state: "directory"
+#
+#     - name: install kubeconfigs
+#       copy:
+#         src: "fetched/{{ item }}"
+#         dest: "/root/kubeconfigs/{{ item }}"
+#       #   gcloud compute scp admin.kubeconfig kube-controller-manager.kubeconfig kube-scheduler.kubeconfig ${instance}:~/
+#       with_items: "{{ kube_configs }}"

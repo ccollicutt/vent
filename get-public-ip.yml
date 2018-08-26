@@ -1,0 +1,7 @@
+---
+
+- hosts:
+    - controller-0
+  tasks:
+    - debug:
+        var: ansible_bond0.ipv4.address

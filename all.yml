@@ -1,0 +1,13 @@
+---
+
+- import_playbook: 00-baremetal-networking.yml
+- import_playbook: 01-client-tools.yml
+- import_playbook: 02-etc-hosts.yml
+- import_playbook: 03-certificate-authority.yml
+- import_playbook: 04-kubernetes-configuration-files.yml
+- import_playbook: 05-encryption-key.yml
+- import_playbook: 06-bootstrapping-etcd.yml
+- import_playbook: 07-bootstrapping-kubernetes-controllers.yml
+- import_playbook: 08-kubernetes-networking.yml
+- import_playbook: 09-bootstrapping-kubernetes-workers.yml
+- import_playbook: 10-dns-addon.yml

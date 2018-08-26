@@ -1,0 +1,53 @@
+auto lo
+iface lo inet loopback
+
+auto bond0
+iface bond0 inet static
+    address {{ ansible_bond0.ipv4.address }}
+    netmask {{ ansible_bond0.ipv4.netmask }}
+    gateway {{ ansible_default_ipv4.gateway }}
+    bond-downdelay 200
+    bond-miimon 100
+    bond-mode 4
+    bond-updelay 200
+    bond-xmit_hash_policy layer3+4
+    bond-lacp-rate 1
+    bond-slaves enp1s0f0 enp1s0f1
+    dns-nameservers 8.8.8.8 8.8.4.4
+
+iface bond0 inet6 static
+    address {{ ansible_bond0.ipv6[0].address }}
+    netmask {{ ansible_bond0.ipv6[0].prefix }}
+    gateway {{ ansible_default_ipv6.gateway }}
+
+# NOTE(curtis): b/c flannel can't understand two ips on an interface and I want
+# vxlan traffic on the internal network, I'm creating a fake interface and
+# putting the internal ip there instead of bond0:0.
+# FIXME: 10.0.0.0/8 is magic?
+{%- if ansible_fake0 is defined -%}
+{%- set internal_address = ansible_fake0.ipv4.address -%}
+{%- set internal_netmask = ansible_fake0.ipv4.netmask -%}
+{%- set internal_network = ansible_fake0.ipv4.network -%}
+{%- else -%}
+{%- set internal_address = ansible_bond0_0.ipv4.address -%}
+{%- set internal_netmask = ansible_bond0_0.ipv4.netmask -%}
+{%- set internal_network = ansible_bond0_0.ipv4.network -%}
+{%- endif -%}
+
+auto fake0
+iface fake0 inet static
+    address {{ internal_address }}
+    netmask {{ internal_netmask }}
+    pre-up /sbin/ip link add fake0 link bond0 type macvlan
+    post-up route add -net 10.0.0.0/8 gw {{ internal_network }}
+    post-down route del -net 10.0.0.0/8 gw {{ internal_network }}
+
+auto enp1s0f0
+iface enp1s0f0 inet manual
+    bond-master bond0
+
+auto enp1s0f1
+iface enp1s0f1 inet manual
+    pre-up sleep 4
+    bond-master bond0
+

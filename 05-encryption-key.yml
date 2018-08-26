@@ -1,0 +1,14 @@
+---
+
+- hosts:
+   - tag_controller[0]
+
+
+- hosts:
+    - tag_controller
+  tasks:
+  
+    - name: create encryption-config.yaml from template
+      template:
+        src: "encryption-config.yaml"
+        dest: "/root/encryption-config.yaml"

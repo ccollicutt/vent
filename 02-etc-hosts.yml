@@ -1,0 +1,17 @@
+- hosts:
+    - tag_controller
+    - tag_worker
+
+  tasks:
+
+    # NOTE: This is not in the k8s the hard way example but it's needed afaik
+    # FIXME: This should probably be done somewhere else
+    - name: configure /etc/hosts
+      lineinfile:
+        dest: "/etc/hosts"
+        regexp: '.*{{ item }}$'
+        line: "{{ hostvars[item].ansible_fake0.ipv4.address }} {{ hostvars[item].ansible_hostname }}"
+        state: present
+      with_flattened:
+        - "{{ groups.tag_controller }}"
+        - "{{ groups.tag_worker }}"

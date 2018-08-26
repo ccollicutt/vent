@@ -1,0 +1,19 @@
+---
+
+- hosts:
+    - tag_controller[0]
+
+  tasks:
+
+    - name: copy flannel deployment
+      template:
+        src: "kube-flannel.yml"
+        dest: "/root/"
+
+    #FIXME: could be a ansible module based deployment
+    #FIXME: would prefer flannel was not deployed via a k8s deployment...
+    - name: run flannel deployment
+      shell: |
+        kubectl apply -f kube-flannel.yml --kubeconfig admin.kubeconfig
+      args:
+        chdir: "/root"
