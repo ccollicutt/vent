@@ -1,4 +1,4 @@
-# Kubernetes the Hard Way on Packet.net with Ansible
+# vent
 
 A couple of years ago I worked on [Kubernetes the Hard Way on AWS with Ansible](https://github.com/ccollicutt/kubernetes-the-hard-way-with-aws-and-ansible) and now I'm doing it again, but this time with Packet.net and Ansible, and, of course, a much updated kthw.
 
@@ -16,7 +16,9 @@ A couple of years ago I worked on [Kubernetes the Hard Way on AWS with Ansible](
 
 ## Overview
 
-See [overview](OVERVIEW.md).
+This deploys Kubernetes onto Packet.net using Ansible, and is based on [Kelsey Higtower's Kubernetes the Hard Way](https://github.com/kelseyhightower/kubernetes-the-hard-way).
+
+For a more in-depth overview, see [overview](OVERVIEW.md).
 
 ## Deploy Kubernetes
 
@@ -28,20 +30,23 @@ Here we will request some baremetal nodes from Packet.net.
 
 *NOTE: We are using SPOT instances to keep costs down, but spot instances can go away at any time.*
 
-Controller node:
-
 ```
 export MAX_PRICE=0.30
 export FACILITY=ams1
 # Controller node
-packet baremetal create-device --facility $FACILITY --spot-instance --spot-price-max $MAX_PRICE --plan c2.medium.x86 --hostname controller-0 -s --tags controller --os-type ubuntu_18_04
+packet baremetal create-device --facility $FACILITY --spot-instance \
+  --spot-price-max $MAX_PRICE --plan c2.medium.x86 \
+  --hostname controller-0 -s --tags controller --os-type ubuntu_18_04
+
 # Worker nodes
 for s in 0 1; do
-  packet baremetal create-device --facility $FACILITY --spot-instance --spot-price-max $MAX_PRICE --plan c2.medium.x86 --hostname worker-$s -s --tags worker --os-type ubuntu_18_04
+  packet baremetal create-device --facility $FACILITY --spot-instance \
+    --spot-price-max $MAX_PRICE --plan c2.medium.x86 --hostname worker-$s \
+    -s --tags worker --os-type ubuntu_18_04
 done
 ```
 
-Note that it can take 10+ minutes for the baremetal nodes to become available.
+Note that it can take 10+ minutes for the nodes to become available.
 
 #### Why Not Use Ansible (or Terraform) to Provision the Servers?
 
